@@ -7,6 +7,10 @@ GET_TIMEOUT = 8
 USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/130.0 Safari/537.36")
 
+RED = "\033[91m"
+GREEN = "\033[92m"
+RESET = "\033[0m"
+
 
 def safe_head(session, url_base):
     """Try HEAD, return (response, method_used). If HEAD fails or returns 405, do GET."""
@@ -18,8 +22,13 @@ def safe_head(session, url_base):
         return r, "HEAD"
     except requests.RequestException:
         # fallback to GET (safe, non-intrusive)
-        r = session.get(url_base, allow_redirects=True, timeout=GET_TIMEOUT)
-        return r, "GET"
+        try:
+            r = session.get(url_base, allow_redirects=True, timeout=GET_TIMEOUT)
+            return r, "GET"
+        except requests.exceptions.RequestException as e:
+            print(f"{RESET}[*] Not able to connect with HEAD or GET{url_base} :{RED} Connection failed {RESET}- ({type(e).__name__})")
+            return None, ""
+
 
 def add_scheme(url_base):
     url_base = url_base.strip()

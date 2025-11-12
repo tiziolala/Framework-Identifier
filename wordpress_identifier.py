@@ -47,49 +47,65 @@ def wp_check_paths(session, url_base):
         time.sleep(REQUEST_DELAY)
 
     RSD_found = False
-    resp = session.get(url_base, allow_redirects=True, timeout=GET_TIMEOUT)
-    soup = BeautifulSoup(resp.text, "html.parser")
-    link = soup.find("link", attrs={"rel": "EditURI", "type": "application/rsd+xml"})
-    if link is not None:
-        resp = session.get(link.get("href"), allow_redirects=True, timeout=GET_TIMEOUT)
 
-        if resp.status_code in ACCEPT_CODE:
-            likely_exists = True
-            path = link.get("href").split("/")
-            path = "/" + path[-1]
-            result["/RSD"] = {
-                "url": resp.url,
-                "method": resp.request.method,
-                "status_code": resp.status_code,
-                "likely_exists": likely_exists,
-            }
-            print(f"{RESET}[*] {path}:{GREEN} {resp.status_code} {RESET}- {resp.url} (from a link tag)")
-            RSD_found = True
+    try:
+        resp = session.get(url_base, allow_redirects=True, timeout=GET_TIMEOUT)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        link = soup.find("link", attrs={"rel": "EditURI", "type": "application/rsd+xml"})
 
-        else:
-            print(f"link tag : {RESET}[*] {link.get("href")}:{RED} {resp.status_code} {RESET}- {resp.url}")
+        if link is not None:
+            try:
+                resp = session.get(link.get("href"), allow_redirects=True, timeout=GET_TIMEOUT)
 
-    if not RSD_found or link is None:
-        url_test = urljoin(url_base, "xmlrpc.php?rsd")
-        resp = session.get(url_test, allow_redirects=True, timeout=GET_TIMEOUT)
-        if resp.status_code in ACCEPT_CODE:
-            likely_exists = True
-            result["/RSD"] = {
-                "url": resp.url,
-                "method": resp.request.method,
-                "status_code": resp.status_code,
-                "likely_exists": likely_exists,
-            }
-            print(f"{RESET}[*] /RSD:{GREEN} {resp.status_code} {RESET}- {resp.url}")
-        else:
-            likely_exists = False
-            result["/RSD"] = {
-                "url": resp.url,
-                "method": resp.request.method,
-                "status_code": resp.status_code,
-                "likely_exists": likely_exists,
-            }
-            print(f"{RESET}[*] /RSD:{RED} {resp.status_code} {RESET}- {resp.url}")
+                if resp.status_code in ACCEPT_CODE:
+                    likely_exists = True
+                    path = link.get("href").split("/")
+                    path = "/" + path[-1]
+                    result["/RSD"] = {
+                        "url": resp.url,
+                        "method": resp.request.method,
+                        "status_code": resp.status_code,
+                        "likely_exists": likely_exists,
+                    }
+                    print(f"{RESET}[*] {path}:{GREEN} {resp.status_code} {RESET}- {resp.url} (from a link tag)")
+                    RSD_found = True
+
+                else:
+                    print(
+                        f"{RESET}[*] {link.get("href")}:{RED} {resp.status_code} {RESET}- {resp.url} (from a link tag)")
+
+            except requests.exceptions.RequestException as e:
+                print(f"{RESET}[*] RSD link:{RED} Connection failed {RESET}- ({type(e).__name__})")
+
+        if not RSD_found or link is None:
+            url_test = urljoin(url_base, "xmlrpc.php?rsd")
+            try:
+                resp = session.get(url_test, allow_redirects=True, timeout=GET_TIMEOUT)
+                if resp.status_code in ACCEPT_CODE:
+                    likely_exists = True
+                    result["/RSD"] = {
+                        "url": resp.url,
+                        "method": resp.request.method,
+                        "status_code": resp.status_code,
+                        "likely_exists": likely_exists,
+                    }
+                    print(f"{RESET}[*] /RSD:{GREEN} {resp.status_code} {RESET}- {resp.url}")
+                else:
+                    likely_exists = False
+                    result["/RSD"] = {
+                        "url": resp.url,
+                        "method": resp.request.method,
+                        "status_code": resp.status_code,
+                        "likely_exists": likely_exists,
+                    }
+                    print(f"{RESET}[*] /RSD:{RED} {resp.status_code} {RESET}- {resp.url}")
+
+            except requests.exceptions.RequestException as e:
+                print(f"{RESET}[*] RSD link:{RED} Connection failed {RESET}- ({type(e).__name__})")
+
+    except requests.exceptions.RequestException as e:
+        print(f"{RESET}[*] {url_base} :{RED} Connection failed {RESET}- ({type(e).__name__})")
+
 
     return result
 
@@ -97,35 +113,40 @@ def wp_check_paths(session, url_base):
 
 def check_wordpress_text(session, url_base):
     result = {"meta": [], "footer": [], "body": False}
-    response = session.get(url_base, allow_redirects=True, timeout=GET_TIMEOUT)
-    html = response.text.lower()
-    soup = BeautifulSoup(html, "html.parser")
+    try:
+        response = session.get(url_base, allow_redirects=True, timeout=GET_TIMEOUT)
+        html = response.text.lower()
+        soup = BeautifulSoup(html, "html.parser")
 
-    meta_tags = soup.find_all("meta", {"name": "generator"})
-    for meta in meta_tags:
-        content = meta.get("content", "").lower()
-        if "wordpress" in content:
-            result["meta"].append(meta)
-            print(f"{RESET}[*] meta_tag content:{GREEN} {content}")
-
-
-    footers = soup.find_all("footer")
-    for f in footers:
-        wp_tags = f.find_all(lambda tag: "wordpress" in tag.get_text().lower())
-        smallest_wp_tags = []
-        for tag in wp_tags:
-            if not any("wordpress" in child.get_text().lower() for child in tag.find_all(recursive=False)):
-                smallest_wp_tags.append(tag)
-
-        result["footer"].extend(smallest_wp_tags)
-        for tag in smallest_wp_tags:
-            print(f"{RESET}[*] footer WordPress tag:{GREEN} {tag} {RESET}")
+        meta_tags = soup.find_all("meta", {"name": "generator"})
+        for meta in meta_tags:
+            content = meta.get("content", "").lower()
+            if "wordpress" in content:
+                result["meta"].append(meta)
+                print(f"{RESET}[*] meta_tag content:{GREEN} {content}")
 
 
-    if "wordpress" in soup.get_text().lower():
-        result["body"] = True
-        color = GREEN if result["body"] else RED
-        print(f"{RESET}[*] Wordpress in the body:{color} {result['body']} {RESET}")
+        footers = soup.find_all("footer")
+        for f in footers:
+            wp_tags = f.find_all(lambda tag: "wordpress" in tag.get_text().lower())
+            smallest_wp_tags = []
+            for tag in wp_tags:
+                if not any("wordpress" in child.get_text().lower() for child in tag.find_all(recursive=False)):
+                    smallest_wp_tags.append(tag)
+
+            result["footer"].extend(smallest_wp_tags)
+            for tag in smallest_wp_tags:
+                print(f"{RESET}[*] footer WordPress tag:{GREEN} {tag} {RESET}")
+
+
+        if "wordpress" in soup.get_text().lower():
+            result["body"] = True
+            color = GREEN if result["body"] else RED
+            print(f"{RESET}[*] Wordpress in the body:{color} {result['body']} {RESET}")
+
+    except requests.exceptions.RequestException as e:
+        print(f"{RESET}[*]Checking WordPress text on {url_base} :{RED} Connection failed {RESET}- ({type(e).__name__})")
+
     return result
 
 
