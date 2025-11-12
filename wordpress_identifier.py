@@ -72,7 +72,7 @@ def wp_check_paths(session, url_base):
 
                 else:
                     print(
-                        f"{RESET}[*] {link.get("href")}:{RED} {resp.status_code} {RESET}- {resp.url} (from a link tag)")
+                        f"{RESET}[*] {link.get('href')}:{RED} {resp.status_code} {RESET}- {resp.url} (from a link tag)")
 
             except requests.exceptions.RequestException as e:
                 print(f"{RESET}[*] RSD link:{RED} Connection failed {RESET}- ({type(e).__name__})")
